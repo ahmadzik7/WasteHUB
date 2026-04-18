@@ -650,8 +650,8 @@ function rPouch(){
     let vH=vs.length>1
       ?`<div class="field"><label>Varian Aktif</label><div class="vpills">${vs.map(v=>`<button class="vp${sh.variant===v?" on":""}" onclick="setV('${ln}','${v}')">${v}</button>`).join("")}</div></div>`
       :`<div class="field"><label>Varian</label><div class="fixed-tag">${vs[0]}</div></div>`;
-    let oH=vs.map(v=>{const pcs=ni(sh.obv[v])*ppb(v);return `<div class="field"><label>Output ${v} (Box)</label><div style="display:flex;gap:6px;align-items:center"><input type="number" min="0" class="num-in" value="${sh.obv[v]||""}" oninput="setOV('${ln}','${v}',this.value)" placeholder="0"/>${pcs>0?`<span class="pcs-tag">${pcs.toLocaleString()} pcs</span>`:""}</div></div>`;}).join("");
-    const lspH=`<div class="lsp"><div class="lsp-hdr"><span class="lsp-badge">Line ${ln}</span><span class="lsp-sub">Output & QC semua mesin</span>${lo>0?`<span class="lsp-pcs">Total: <b>${lo.toLocaleString()} pcs</b></span>`:""}</div><div class="sec-lbl">📦 Output per Varian</div><div class="field-row">${vH}${oH}</div><div class="sec-lbl">🔬 Data QC</div><div class="field-row">${[["Sampel QC","sampelQC"],["SL QC","slQC"],["Hasil Heater","hasilHeater"],["Waste Filling","wasteFilling"]].map(([l,k])=>`<div class="field"><label>${l}</label><input type="number" min="0" class="num-in" value="${sh[k]||""}" oninput="setQC('${ln}','${k}',this.value)" placeholder="0"/></div>`).join("")}</div></div>`;
+    let oH=vs.map(v=>{const pcs=ni(sh.obv[v])*ppb(v);return `<div class="field"><label>Output ${v} (Box)</label><div style="display:flex;gap:6px;align-items:center"><input type="number" min="0" class="num-in" value="${sh.obv[v]||""}" data-ln="${ln}" data-v="${v}" onblur="setOV(this)" onkeydown="if(event.key==='Enter'){this.blur();}" onfocus="this.select()" inputmode="numeric" placeholder="0"/><span class="pcs-tag" id="pcs-${ln}-${v.replace(/[^a-z0-9]/gi,'_')}" style="${pcs>0?'':'display:none'}">${pcs>0?pcs.toLocaleString()+' pcs':''}</span></div></div>`;}).join("");
+    const lspH=`<div class="lsp"><div class="lsp-hdr"><span class="lsp-badge">Line ${ln}</span><span class="lsp-sub">Output & QC semua mesin</span>${lo>0?`<span class="lsp-pcs">Total: <b>${lo.toLocaleString()} pcs</b></span>`:""}</div><div class="sec-lbl">📦 Output per Varian</div><div class="field-row">${vH}${oH}</div><div class="sec-lbl">🔬 Data QC</div><div class="field-row">${[["Sampel QC","sampelQC"],["SL QC","slQC"],["Hasil Heater","hasilHeater"],["Waste GF Berjalan","wasteFilling"]].map(([l,k])=>`<div class="field"><label>${l}</label><input type="number" min="0" class="num-in" value="${sh[k]||""}" oninput="setQC('${ln}','${k}',this.value)" placeholder="0"/></div>`).join("")}</div></div>`;
     let mH="";
     ents.forEach(e=>{
       const tw=twaste(e.w),pc2=pctC(tw,lo),op=S.epch[e.id]!==false;
@@ -667,7 +667,41 @@ function rPouch(){
 function togL(ln){S.eln[ln]=!S.eln[ln];sched();rPouch();}
 function togP(id){S.epch[id]=S.epch[id]===false?true:false;sched();rPouch();}
 function setV(ln,v){S.ls[ln].variant=v;sched();renderAll();}
-function setOV(ln,v,val){S.ls[ln].obv[v]=val;sched();renderAll();}
+function setOV(inp){
+  // inp is the input element (called from onblur)
+  const ln=inp.dataset.ln, v=inp.dataset.v, val=inp.value;
+  if(!S.ls[ln]) return;
+  S.ls[ln].obv[v]=val;
+  sched();
+  // Update pcs-tag in-place without full re-render
+  const key=v.replace(/[^a-z0-9]/gi,'_');
+  const tag=document.getElementById(`pcs-${ln}-${key}`);
+  if(tag){
+    const pcs=ni(val)*ppb(v);
+    if(pcs>0){tag.textContent=pcs.toLocaleString()+' pcs';tag.style.display='';}
+    else{tag.style.display='none';}
+  }
+  // Update LSP total pcs header
+  const lo=lout(ln);
+  const lspPcs=document.querySelector(`#card-l-${ln} .lsp-pcs`);
+  if(lo>0){
+    if(lspPcs){lspPcs.innerHTML=`Total: <b>${lo.toLocaleString()} pcs</b>`;}
+    else{
+      const lspHdr=document.querySelector(`#card-l-${ln} .lsp-hdr`);
+      if(lspHdr){const sp=document.createElement('span');sp.className='lsp-pcs';sp.innerHTML=`Total: <b>${lo.toLocaleString()} pcs</b>`;lspHdr.appendChild(sp);}
+    }
+  } else if(lspPcs){lspPcs.remove();}
+  // Update card header output stat
+  const cardHdr=document.querySelector(`#card-l-${ln} .card-head > .chr .sstat`);
+  if(cardHdr){
+    const ltw=S.ent.filter(e=>e.line===ln).reduce((s,e)=>s+twaste(e.w),0);
+    const pc=pctC(ltw,lo);
+    cardHdr.innerHTML=`Output <b>${lo.toLocaleString()} pcs</b>`;
+    const hPill=document.querySelector(`#card-l-${ln} .card-head > .chr .pct-pill`);
+    if(hPill){hPill.textContent=pctS(ltw,lo);hPill.style.color=pc;hPill.style.background=pc+'22';hPill.style.border=`1px solid ${pc}`;}
+  }
+  updStats();
+}
 function setQC(ln,k,val){S.ls[ln][k]=val;sched();updStats();}
 function sWaste(id,t,val){
   const e=S.ent.find(x=>x.id===id);if(!e)return;
@@ -938,7 +972,7 @@ function exportXLSX(){
   const XLSX=window.XLSX,wb=XLSX.utils.book_new();
   const hdr=["Grup:",S.hdr.g,"Tanggal:",S.hdr.d,"Shift:",`Shift ${S.hdr.s}`];
   const ws1=[["WASTE POUCH REPORT"],hdr,[]];
-  ws1.push(["Line","Mesin","Varian","Output(Box)","Output(Pcs)",...WT,"Total Waste","% Waste","Sampel QC","SL QC","Hasil Heater","Waste Filling"]);
+  ws1.push(["Line","Mesin","Varian","Output(Box)","Output(Pcs)",...WT,"Total Waste","% Waste","Sampel QC","SL QC","Hasil Heater","Waste GF Berjalan"]);
   S.ent.forEach(e=>{const sh=S.ls[e.line]||emLS(e.line),pcs=lout(e.line),tw=twaste(e.w);ws1.push([e.line,e.machine,sh.variant,Object.values(sh.obv).reduce((s,v)=>ni(v)+s,0),pcs,...WT.map(t=>ni(e.w[t])),tw,pcs?(tw/pcs*100).toFixed(2)+"%":"0%",ni(sh.sampelQC),ni(sh.slQC),ni(sh.hasilHeater),ni(sh.wasteFilling)]);});
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(ws1),"Waste Pouch");
   const ws2=[["DATA COUNTER MESIN"],hdr,[]];
