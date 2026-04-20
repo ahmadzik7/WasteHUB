@@ -451,14 +451,14 @@ const LC={
   C2:{machines:["D1","D2","D7","D8"],    variants:["77yb"]},
   C3:{machines:["D9","D10","D12","D14"], variants:["77yb","77bb"]},
   C5:{machines:["D11","D13","D16","D17"],variants:["77bb"]},
-  D2:{machines:["F1"],                   variants:["250","270"]},
-  D3:{machines:["F2"],                   variants:["550","700","725","1000"]},
-  D4:{machines:["F3"],                   variants:["550","700","725","1000"]},
+  D2:{machines:["D15"],                  variants:["250","270"]},
+  D3:{machines:["F1"],                   variants:["550","700","725","1000"]},
+  D4:{machines:["F2","F3"],              variants:["550","700","725","1000"]},
 };
 const PPB={"77yb":48,"77bb":48,"250":24,"270":24,"550":12,"700":12,"725":12,"1000":12};
 const WT=["Gagal Filling Kotor Dalam","Gagal Filling Sobek","Gagal Filling Tersealing",
   "Pouch Bocor","Pouch Kembung","Tidak Ada Cooling","Berat Over/Under","Sealing NG","Seal Ngetrap","Bocor Pouch Sobek"];
-const GFV=["77g","550g","1000g","270g","725g","77BB"];
+const GFV=["77g","550g","1000g","270g","725g","77BB","250g","700g"];
 const KL=[
   {id:"LC1", lb:"LC1",        vr:"77YB",      tg:1},
   {id:"LC2", lb:"LC2",        vr:"77YB",      tg:1},
@@ -493,7 +493,6 @@ function dfState(){
     gf:{},
     kd:{},
     ekd:{},  // expanded kardus card
-    wc:{},   // waste cache: {"line-machine": wasteObj} — data tetap ada saat line di-unselect
   };
 }
 let S=loadS();
@@ -502,7 +501,7 @@ function loadS(){
   return dfState();
 }
 function saveS(){
-  try{localStorage.setItem(SK,JSON.stringify({hdr:S.hdr,ls:S.ls,ent:S.ent,ctr:S.ctr,gf:S.gf,kd:S.kd,epch:S.epch,eln:S.eln,ectr:S.ectr,ekd:S.ekd,wc:S.wc}));}catch(e){}
+  try{localStorage.setItem(SK,JSON.stringify({hdr:S.hdr,ls:S.ls,ent:S.ent,ctr:S.ctr,gf:S.gf,kd:S.kd,epch:S.epch,eln:S.eln,ectr:S.ectr,ekd:S.ekd}));}catch(e){}
 }
 // ── Kredensial Drive ditanamkan langsung — tidak perlu setup ulang di perangkat lain ──
 const _DEFAULT_CFG={
@@ -601,21 +600,11 @@ function rLineBar(){
 
 function toggleLine(ln){
   if(S.ent.some(e=>e.line===ln)){
-    // Simpan waste setiap mesin ke cache sebelum dihapus
-    S.ent.filter(e=>e.line===ln).forEach(e=>{
-      if(!S.wc) S.wc={};
-      S.wc[`${ln}-${e.machine}`]=e.w;
-    });
     S.ent=S.ent.filter(e=>e.line!==ln);
     delete S.ctr[ln];
   } else {
     ensLS(ln);ensCtr(ln);
-    LC[ln].machines.forEach(m=>{
-      const cacheKey=`${ln}-${m}`;
-      // Restore data waste dari cache jika ada, pakai kosong jika belum pernah diisi
-      const savedWaste=(S.wc&&S.wc[cacheKey])||emW();
-      S.ent.push({id:`${ln}-${m}-${Date.now()}`,line:ln,machine:m,w:savedWaste});
-    });
+    LC[ln].machines.forEach(m=>{S.ent.push({id:`${ln}-${m}-${Date.now()}`,line:ln,machine:m,w:emW()});});
     S.eln[ln]=true;
   }
   sched();renderAll();
@@ -623,16 +612,11 @@ function toggleLine(ln){
 function toggleMachine(ln,m){
   const ex=S.ent.find(e=>e.line===ln&&e.machine===m);
   if(ex){
-    // Simpan waste ke cache sebelum dihapus
-    if(!S.wc) S.wc={};
-    S.wc[`${ln}-${m}`]=ex.w;
     S.ent=S.ent.filter(e=>!(e.line===ln&&e.machine===m));
     if(S.ctr[ln])S.ctr[ln]=S.ctr[ln].filter(x=>x.m!==m);
   } else {
     ensLS(ln);ensCtr(ln);
-    const cacheKey=`${ln}-${m}`;
-    const savedWaste=(S.wc&&S.wc[cacheKey])||emW();
-    S.ent.push({id:`${ln}-${m}-${Date.now()}`,line:ln,machine:m,w:savedWaste});
+    S.ent.push({id:`${ln}-${m}-${Date.now()}`,line:ln,machine:m,w:emW()});
     if(!S.ctr[ln].find(x=>x.m===m))S.ctr[ln].push({m,counter:"",fg:""});
   }
   sched();renderAll();
